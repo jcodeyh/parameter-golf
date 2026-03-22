@@ -38,3 +38,24 @@ RUN_ID=submission1 DATA_PATH=./data/datasets/fineweb10B_sp1024/ TOKENIZER_PATH=.
 - `data/` loading logic unless explicitly asked
 - Evaluation integrity (BPB calculation, val split)
 - `records/` folder contents (read-only reference)
+
+## Known PyTorch Compatibility Issues
+- Do NOT use torch.torch_version.TorchVersion() inside forward() or any 
+  torch.compile-traced function — dynamo cannot trace it
+- Do NOT use enable_gqa= keyword in scaled_dot_product_attention — not
+  supported before PyTorch 2.2, and torch.compile traces both branches
+  even with init-time booleans. Instead, always manually repeat k/v heads.
+- Version checks must be done at __init__ time as a stored boolean attribute,
+  never inline inside forward()
+- Runpod RTX 4090 pods run an older PyTorch — always write compile-safe code
+```
+
+**Claude Code memory** (`~/.claude/CLAUDE.md` — your global one) — good for things true across all your projects, like "always write torch.compile-safe code." But this is competition-specific so CLAUDE.md in the repo is better.
+
+**Custom slash command** — useful if this pattern repeats. Create `.claude/commands/check-compile.md`:
+```
+Review train_gpt.py for any code that would break torch.compile/dynamo tracing:
+- Version checks inside forward()
+- Non-traceable Python objects in traced functions
+- Any torch._dynamo.exc.Unsupported patterns
+Report issues found without fixing them.

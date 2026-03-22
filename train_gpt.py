@@ -541,7 +541,6 @@ class CausalSelfAttention(nn.Module):
         self.proj._zero_init = True
         self.q_gain = nn.Parameter(torch.full((num_heads,), qk_gain_init, dtype=torch.float32))
         self.rotary = Rotary(self.head_dim, base=rope_base)
-        self.use_enable_gqa = (num_kv_heads != num_heads) and tuple(int(x) for x in torch.__version__.split(".")[:2]) >= (2, 2)
 
     def forward(self, x: Tensor) -> Tensor:
         bsz, seqlen, dim = x.shape
@@ -554,19 +553,11 @@ class CausalSelfAttention(nn.Module):
         q = apply_rotary_emb(q, cos, sin)
         k = apply_rotary_emb(k, cos, sin)
         q = q * self.q_gain.to(dtype=q.dtype)[None, :, None, None]
-        if self.use_enable_gqa:
-            y = F.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, is_causal=True,
-                enable_gqa=True,
-            )
-        elif self.num_kv_heads != self.num_heads:
-            # Manually repeat KV heads to match Q head count for older PyTorch without enable_gqa
+        if self.num_kv_heads != self.num_heads:
             n_rep = self.num_heads // self.num_kv_heads
             k = k[:, :, None, :, :].expand(bsz, self.num_kv_heads, n_rep, seqlen, self.head_dim).reshape(bsz, self.num_heads, seqlen, self.head_dim)
             v = v[:, :, None, :, :].expand(bsz, self.num_kv_heads, n_rep, seqlen, self.head_dim).reshape(bsz, self.num_heads, seqlen, self.head_dim)
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, is_causal=True)
-        else:
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, is_causal=True)
+        y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, is_causal=True)
         y = y.transpose(1, 2).contiguous().reshape(bsz, seqlen, dim)
         return self.proj(y)
 
