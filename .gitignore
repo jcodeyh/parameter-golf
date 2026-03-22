@@ -12,3 +12,5 @@ logs/
 .claude/settings.json
 .claude/todos
 .claude/*.session
+.claude
+CLAUDE.mdCLAUDE.md
